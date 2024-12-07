@@ -1,0 +1,3 @@
+#include "minesweeper.h"
+
+ID_ICON ICON "icons/mine2.ico"
