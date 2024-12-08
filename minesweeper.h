@@ -1,1 +1,20 @@
 #define ID_ICON 9003
+#define ID_BUTTON_ICON 9004
+#define ID_FLAG_ICON 9005
+#define ID_MINE_ICON 9006
+
+#define GRID_SIZE 10
+#define CELL_SIZE 30
+#define NUM_MINES 10
+#define TOOLBAR_HEIGHT 50
+#define BORDER_WIDTH 20
+#define WINDOW_HEIGHT GRID_SIZE + TOOLBAR_HEIGHT
+
+#define BLUE RGB(0, 1, 253)
+#define GREEN RGB(1, 126, 0)
+#define RED RGB(254, 0, 1)
+#define DARK_BLUE RGB(1, 1, 128)
+#define MAROON RGB(129, 1, 1)
+#define TEAL RGB(0, 128, 128)
+#define BLACK RGB(0, 0, 0)
+#define GRAY RGB(128, 128, 128)

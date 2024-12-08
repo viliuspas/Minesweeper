@@ -1,9 +1,3 @@
-#if defined(UNICODE) && !defined(_UNICODE)
-    #define _UNICODE
-#elif defined(_UNICODE) && !defined(UNICODE)
-    #define UNICODE
-#endif
-
 #include <tchar.h>
 #include <windows.h>
 #include <iostream>
@@ -11,19 +5,13 @@
 #include <ctime>
 #include "minesweeper.h"
 
-#define GRID_SIZE 10
-#define CELL_SIZE 30
-#define NUM_MINES 10
-#define TOOLBAR_HEIGHT 50
-#define BORDER_WIDTH 20
-#define WINDOW_HEIGHT GRID_SIZE + TOOLBAR_HEIGHT
-
 using namespace std;
 
 LRESULT CALLBACK WindowProcedure (HWND, UINT, WPARAM, LPARAM);
-void Painter(HWND);
+void PaintComponents(HWND, HINSTANCE);
 void PaintGrid(HDC);
-void PaintValues(HDC);
+void DrawColorText(HDC, RECT, char*, COLORREF);
+void PaintValues(HDC, HINSTANCE);
 void InitializeGrid(int, int);
 void RevealCells(int, int);
 bool areNeighbors(int, int, int , int);
@@ -40,6 +28,7 @@ struct Cell {
 
 vector<vector<Cell> > grid(GRID_SIZE, vector<Cell>(GRID_SIZE));
 HWND gridButtons[GRID_SIZE][GRID_SIZE];
+HWND mineButton;
 bool isGridInitialized = false;
 
 int WINAPI WinMain (HINSTANCE hThisInstance, HINSTANCE hPrevInstance, LPSTR lpszArgument, int nCmdShow)
@@ -89,7 +78,7 @@ int WINAPI WinMain (HINSTANCE hThisInstance, HINSTANCE hPrevInstance, LPSTR lpsz
     return messages.wParam;
 }
 
-LRESULT CALLBACK WindowProcedure (HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     static HINSTANCE hInstance;
 
@@ -99,8 +88,12 @@ LRESULT CALLBACK WindowProcedure (HWND hwnd, UINT message, WPARAM wParam, LPARAM
             PostQuitMessage(0);
             break;
 
-       case WM_CREATE:
+        case WM_CREATE:
+        {
             hInstance = (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE);
+            HICON hButtonIcon = LoadIcon(hInstance, MAKEINTRESOURCE(ID_BUTTON_ICON));
+            HICON hFlagIcon = LoadIcon(hInstance, MAKEINTRESOURCE(ID_FLAG_ICON));
+
             for (int x = 0; x < GRID_SIZE; ++x)
             {
                 for (int y = 0; y < GRID_SIZE; ++y)
@@ -108,23 +101,48 @@ LRESULT CALLBACK WindowProcedure (HWND hwnd, UINT message, WPARAM wParam, LPARAM
                     gridButtons[x][y] = CreateWindow(
                         _T("BUTTON"),
                         _T(""),
-                        WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-                        (x + ((double)(BORDER_WIDTH + 1) / (double)CELL_SIZE)) * CELL_SIZE,
-                        (y + ((double)(TOOLBAR_HEIGHT + 1) / (double)CELL_SIZE)) * CELL_SIZE,
+                        WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_ICON,
+                        x * CELL_SIZE + BORDER_WIDTH + 1,
+                        y * CELL_SIZE + TOOLBAR_HEIGHT,
                         CELL_SIZE,
                         CELL_SIZE,
                         hwnd,
-                        (HMENU)(x * GRID_SIZE + y),
+                        (HMENU)(x * GRID_SIZE + y), // ButtonID
                         hInstance,
                         NULL);
+
+                    SendMessage(gridButtons[x][y], BM_SETIMAGE, IMAGE_ICON, (LPARAM)hButtonIcon);
                 }
             }
+
+            mineButton = CreateWindow(
+                        _T("BUTTON"),
+                        _T(""),
+                        WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_ICON,
+                        0,
+                        0,
+                        CELL_SIZE,
+                        CELL_SIZE,
+                        hwnd,
+                        (HMENU)ID_MINE_ICON, // ButtonID
+                        hInstance,
+                        NULL);
+
+            SendMessage(mineButton, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hFlagIcon);
             break;
+        }
 
         case WM_COMMAND:
             if (HIWORD(wParam) == BN_CLICKED)
             {
                 int buttonID = LOWORD(wParam);
+
+                if(buttonID == ID_MINE_ICON)
+                {
+                    cout<<"Mine button clicked"<<endl;
+                    break;
+                }
+
                 int x = buttonID / GRID_SIZE;
                 int y = buttonID % GRID_SIZE;
 
@@ -133,15 +151,17 @@ LRESULT CALLBACK WindowProcedure (HWND hwnd, UINT message, WPARAM wParam, LPARAM
                     InitializeGrid(x, y);
                     isGridInitialized = true;
                 }
-                RevealCells(x, y);
+
+                if (!grid[x][y].isFlagged)
+                {
+                    RevealCells(x, y);
+                }
             }
             break;
 
         case WM_PAINT:
-        {
-            Painter(hwnd);
+            PaintComponents(hwnd, hInstance);
             break;
-        }
 
         default:
             return DefWindowProc(hwnd, message, wParam, lParam);
@@ -150,20 +170,20 @@ LRESULT CALLBACK WindowProcedure (HWND hwnd, UINT message, WPARAM wParam, LPARAM
     return 0;
 }
 
-void Painter(HWND hwnd)
+void PaintComponents(HWND hwnd, HINSTANCE hInstance)
 {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
 
     PaintGrid(hdc);
-    PaintValues(hdc);
+    PaintValues(hdc, hInstance);
 
     EndPaint(hwnd, &ps);
 }
 
 void PaintGrid(HDC hdc)
 {
-    HPEN hPen = CreatePen(PS_SOLID, 1, RGB(128, 128, 128));
+    HPEN hPen = CreatePen(PS_SOLID, 1, GRAY);
     SelectObject(hdc, hPen);
 
     for (int i = 0; i <= GRID_SIZE; ++i)
@@ -190,7 +210,7 @@ void PaintGrid(HDC hdc)
     DeleteObject(hPen);
 }
 
-void PaintValues(HDC hdc)
+void PaintValues(HDC hdc, HINSTANCE hInstance)
 {
     RECT rect;
     HFONT hfont = CreateFont(CELL_SIZE, 0, 0, 0, 0, 0, 0, 0, OEM_CHARSET, 0, 0, 0, 0, TEXT("Terminal"));
@@ -203,51 +223,52 @@ void PaintValues(HDC hdc)
         for (int y = 0; y < GRID_SIZE; ++y)
         {
             SetRect(&rect,
-                    x * CELL_SIZE + BORDER_WIDTH + 1,
-                    y * CELL_SIZE + TOOLBAR_HEIGHT,
-                    (x + 1) * CELL_SIZE + BORDER_WIDTH + 1,
-                    (y + 1) * CELL_SIZE + TOOLBAR_HEIGHT);
+                x * CELL_SIZE + BORDER_WIDTH,
+                y * CELL_SIZE + TOOLBAR_HEIGHT,
+                (x + 1) * CELL_SIZE + BORDER_WIDTH,
+                (y + 1) * CELL_SIZE + TOOLBAR_HEIGHT);
 
             if (grid[x][y].isMine)
             {
-                SetTextColor(hdc, RGB(0, 0, 0));
-                DrawText(hdc, TEXT("M"), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                HICON hMineIcon = LoadIcon(hInstance, MAKEINTRESOURCE(ID_MINE_ICON));
+                DrawIcon(hdc, rect.left, rect.top, hMineIcon);
                 continue;
             }
+
+            SetRect(&rect,
+                x * CELL_SIZE + BORDER_WIDTH + 2,
+                y * CELL_SIZE + TOOLBAR_HEIGHT + 1,
+                (x + 1) * CELL_SIZE + BORDER_WIDTH + 2,
+                (y + 1) * CELL_SIZE + TOOLBAR_HEIGHT + 1);
 
             switch (grid[x][y].adjacentMines)
             {
                 case 1:
-                    SetTextColor(hdc, RGB(0, 0, 253)); // Blue
-                    DrawText(hdc, TEXT("1"), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawColorText(hdc, rect, "1", BLUE);
                     break;
                 case 2:
-                    SetTextColor(hdc, RGB(1, 126, 0)); // Green
-                    DrawText(hdc, TEXT("2"), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawColorText(hdc, rect, "2", GREEN);
                     break;
                 case 3:
-                    SetTextColor(hdc, RGB(254, 0, 1)); // Red
-                    DrawText(hdc, TEXT("3"), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawColorText(hdc, rect, "3", RED);
                     break;
                 case 4:
-                    SetTextColor(hdc, RGB(1, 1, 128)); // Dark Blue
-                    DrawText(hdc, TEXT("4"), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawColorText(hdc, rect, "4", DARK_BLUE);
                     break;
                 case 5:
-                    SetTextColor(hdc, RGB(129, 1, 1)); // Maroon
-                    DrawText(hdc, TEXT("5"), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawColorText(hdc, rect, "5", MAROON);
                     break;
                 case 6:
-                    SetTextColor(hdc, RGB(0, 128, 128)); // Teal
-                    DrawText(hdc, TEXT("6"), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawColorText(hdc, rect, "6", TEAL);
                     break;
                 case 7:
-                    SetTextColor(hdc, RGB(0, 0, 0)); // Black
-                    DrawText(hdc, TEXT("7"), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawColorText(hdc, rect, "7", BLACK);
                     break;
                 case 8:
-                    SetTextColor(hdc, RGB(128, 128, 128)); // Gray
-                    DrawText(hdc, TEXT("8"), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawColorText(hdc, rect, "8", GRAY);
+                    break;
+                case 9:
+                    DrawColorText(hdc, rect, "9", BLACK);
                     break;
                 default:
                     break;
@@ -259,6 +280,11 @@ void PaintValues(HDC hdc)
     DeleteObject(hfont);
 }
 
+void DrawColorText(HDC hdc, RECT rect, char* text, COLORREF color)
+{
+    SetTextColor(hdc, color);
+    DrawText(hdc, TEXT(text), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+}
 
 void InitializeGrid(int startX, int startY)
 {
@@ -268,9 +294,8 @@ void InitializeGrid(int startX, int startY)
     {
         int x = rand() % GRID_SIZE;
         int y = rand() % GRID_SIZE;
-        if (!grid[x][y].isMine && !areNeighbors(startX, startY, x, y))
+        if (!grid[x][y].isMine && !areNeighbors(startX, startY, x, y) && x != startX && y != startY)
         {
-
             grid[x][y].isMine = true;
             ++minesPlaced;
         }
@@ -320,16 +345,10 @@ void RevealCells(int x, int y)
 
 bool areNeighbors(int x1, int y1, int x2, int y2)
 {
-    for (int nx = x1 - 1; nx <= x1 + 1; ++nx)
-    {
-        for (int ny = y1 - 1; ny <= y1 + 1; ++ny)
-        {
-            if (nx < 0 || ny < 0 || nx >= GRID_SIZE || ny >= GRID_SIZE) continue;
-            if (nx == x2 && ny == y2)
-                return true;
-        }
-    }
-    return false;
+    int dx = abs(x1 - x2);
+    int dy = abs(y1 - y2);
+
+    return (dx <= 1 && dy <= 1 && (dx + dy > 0));
 }
 
 void PrintGrid()

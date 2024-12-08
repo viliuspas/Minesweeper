@@ -1,3 +1,6 @@
 #include "minesweeper.h"
 
-ID_ICON ICON "icons/mine2.ico"
+ID_ICON ICON "icons/button-flag.ico"
+ID_FLAG_ICON ICON "icons/button-flag.ico"
+ID_BUTTON_ICON ICON "icons/button.ico"
+ID_MINE_ICON ICON "icons/mine0.ico"
