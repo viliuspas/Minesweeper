@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <ctime>
+#include<stdio.h>
 #include "minesweeper.h"
 
 using namespace std;
@@ -11,6 +12,10 @@ LRESULT CALLBACK WindowProcedure (HWND, UINT, WPARAM, LPARAM);
 void PaintComponents(HWND, HINSTANCE);
 void PaintGrid(HDC);
 void DrawColorText(HDC, RECT, char*, COLORREF);
+void PaintMineCounter(HDC, int);
+void PaintTimer(HDC, int);
+void CleanBackground(HWND);
+void PaintNumberDisplay(HDC, RECT, int);
 void PaintValues(HDC, HINSTANCE);
 void PaintFailedMine(int, int, HWND, HINSTANCE);
 void InitializeGrid(int, int);
@@ -31,10 +36,14 @@ struct Cell {
 int gridSize = GRID_SIZE;
 int numMines = NUM_MINES;
 int revealedCells = 0;
+int elapsedSeconds = 0;
+int flaggsLeft = numMines;
 vector<vector<Cell> > grid(gridSize, vector<Cell>(gridSize));
 vector<vector<HWND> > gridButtons(gridSize, vector<HWND>(gridSize));
 bool isGridInitialized = false;
-HMENU hMenu = LoadMenu(GetModuleHandle(NULL), MAKEINTRESOURCE(IDR_MYMENU));;
+bool hasGameEnded = false;
+HMENU hMenu = LoadMenu(GetModuleHandle(NULL), MAKEINTRESOURCE(IDR_MYMENU));
+HWND smileyButton = NULL;
 
 int WINAPI WinMain (HINSTANCE hThisInstance, HINSTANCE hPrevInstance, LPSTR lpszArgument, int nCmdShow)
 {
@@ -88,6 +97,9 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     static HINSTANCE hInstance = (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE);
     HICON hButtonIcon = LoadIcon(hInstance, MAKEINTRESOURCE(ID_BUTTON_ICON));
     HICON hFlagIcon = LoadIcon(hInstance, MAKEINTRESOURCE(ID_FLAG_ICON));
+    HICON hSmileyHappyIcon = LoadIcon(hInstance, MAKEINTRESOURCE(ID_SMILEY_HAPPY_ICON));
+    HICON hSmileySadIcon = LoadIcon(hInstance, MAKEINTRESOURCE(ID_SMILEY_SAD_ICON));
+    HICON hSmileyCoolIcon = LoadIcon(hInstance, MAKEINTRESOURCE(ID_SMILEY_COOL_ICON));
 
     switch (message)
     {
@@ -97,6 +109,22 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case WM_CREATE:
         {
+            // Smiley button
+            smileyButton = CreateWindow(
+                _T("BUTTON"),
+                _T(""),
+                WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_ICON,
+                (gridSize * CELL_SIZE + BORDER_WIDTH * 2) / 2 - CELL_SIZE / 2,
+                TOOLBAR_HEIGHT / 2 - CELL_SIZE / 2,
+                CELL_SIZE,
+                CELL_SIZE,
+                hwnd,
+                (HMENU)ID_SMILEY_HAPPY_ICON,
+                hInstance,
+                NULL
+            );
+
+            SendMessage(smileyButton, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hSmileyHappyIcon);
 
             // Grid buttons
             for (int x = 0; x < gridSize; ++x)
@@ -114,7 +142,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                         hwnd,
                         (HMENU)(x * gridSize + y), // ButtonID
                         hInstance,
-                        NULL);
+                        NULL
+                    );
 
                     SendMessage(gridButtons[x][y], BM_SETIMAGE, IMAGE_ICON, (LPARAM)hButtonIcon);
                 }
@@ -165,9 +194,21 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                         break;
                 }
             }
+
+            // Smiley button
+            else if (LOWORD(wParam) == ID_SMILEY_HAPPY_ICON)
+            {
+                ResetGame(hwnd, gridSize, numMines);
+                SendMessage(smileyButton, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hSmileyHappyIcon);
+                break;
+            }
+
             // Buttons
             else
             {
+                if (hasGameEnded)
+                    break;
+
                 int buttonID = LOWORD(wParam);
                 int x = buttonID / gridSize;
                 int y = buttonID % gridSize;
@@ -175,6 +216,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 if (!isGridInitialized)
                 {
                     InitializeGrid(x, y);
+                    SetTimer(hwnd, 1, 1000, NULL);
                     isGridInitialized = true;
                 }
 
@@ -183,8 +225,11 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                     RevealCells(x, y);
                 }
 
+                // Losing condition
                 if (grid[x][y].isMine && !grid[x][y].isFlagged)
                 {
+                    hasGameEnded = true;
+                    SendMessage(smileyButton, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hSmileySadIcon);
                     PaintFailedMine(x, y, hwnd, hInstance);
                     for (int xi = 0; xi < gridSize; ++xi)
                     {
@@ -197,13 +242,16 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                         }
                     }
                     MessageBox(hwnd, TEXT("You Lost!"), TEXT("Minesweeper"), MB_OK);
-                    ResetGame(hwnd, gridSize, numMines);
                     break;
                 }
 
-                if (revealedCells == gridSize - numMines)
+                // Winning condition
+                if (revealedCells == gridSize * gridSize - numMines)
                 {
+                    hasGameEnded = true;
+                    SendMessage(smileyButton, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hSmileyCoolIcon);
                     MessageBox(hwnd, TEXT("You Won!"), TEXT("Minesweeper"), MB_OK);
+                    break;
                 }
 
             }
@@ -211,7 +259,12 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case WM_CONTEXTMENU:
         {
+            if (hasGameEnded)
+                break;
+
+            // Flag cells
             HWND hButton = (HWND)wParam;
+
             for (int x = 0; x < gridSize; ++x)
             {
                 for (int y = 0; y < gridSize; ++y)
@@ -222,15 +275,34 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                         {
                             SendMessage(hButton, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hFlagIcon);
                             grid[x][y].isFlagged = true;
+                            flaggsLeft--;
                         }
                         else
                         {
                             SendMessage(hButton, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hButtonIcon);
                             grid[x][y].isFlagged = false;
+                            flaggsLeft++;
                         }
+
+                        HDC hdc = GetDC(hwnd);
+                        PaintMineCounter(hdc, flaggsLeft);
+                        ReleaseDC(hwnd, hdc);
                         break;
                     }
                 }
+            }
+            break;
+        }
+
+        case WM_TIMER:
+        {
+            if (wParam == 1 && !hasGameEnded && isGridInitialized)
+            {
+                elapsedSeconds++;
+
+                HDC hdc = GetDC(hwnd);
+                PaintTimer(hdc, elapsedSeconds);
+                ReleaseDC(hwnd, hdc);
             }
             break;
         }
@@ -251,8 +323,63 @@ void PaintComponents(HWND hwnd, HINSTANCE hInstance)
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
 
+    PaintMineCounter(hdc, flaggsLeft);
+    PaintTimer(hdc, 0);
     PaintGrid(hdc);
     PaintValues(hdc, hInstance);
+
+    EndPaint(hwnd, &ps);
+}
+
+void PaintMineCounter(HDC hdc, int number)
+{
+    RECT rect;
+    SetRect(&rect, BORDER_WIDTH + 1, 5, BORDER_WIDTH + 70, TOOLBAR_HEIGHT - 5);
+    PaintNumberDisplay(hdc, rect, number);
+}
+
+void PaintTimer(HDC hdc, int number)
+{
+    RECT rect;
+    SetRect(&rect, gridSize * CELL_SIZE + BORDER_WIDTH - 70, 5, gridSize * CELL_SIZE + BORDER_WIDTH, TOOLBAR_HEIGHT - 5);
+    PaintNumberDisplay(hdc, rect, number);
+}
+
+void PaintNumberDisplay(HDC hdc, RECT rect, int number)
+{
+    char text[4];
+    if (number / 100 > 0)
+        sprintf(text, "%d", number);
+    else if (number / 10 > 0)
+        sprintf(text, "0%d", number);
+    else if (number < 0 && number > -10)
+        sprintf(text, "-0%d", number * -1);
+    else if (number <= -10)
+        sprintf(text, "-%d", number * -1);
+    else
+        sprintf(text, "00%d", number);
+
+    HFONT hfont = CreateFont(40, 18, 0, 0, 0, 0, 0, 0, OEM_CHARSET, 0, 0, 0, 0, TEXT("Terminal"));
+
+    FillRect(hdc, &rect, CreateSolidBrush(BLACK));
+
+    HGDIOBJ hOldFont = (HFONT)SelectObject(hdc, hfont);
+
+    SetBkColor(hdc, BLACK);
+    DrawColorText(hdc, rect, text, RED);
+
+    SelectObject(hdc, hOldFont);
+    DeleteObject(hfont);
+}
+
+void CleanBackground(HWND hwnd)
+{
+    PAINTSTRUCT ps;
+    HDC hdc = BeginPaint(hwnd, &ps);
+
+    RECT rect;
+    GetClientRect(hwnd, &rect);
+    FillRect(hdc, &rect, CreateSolidBrush(RGB(240, 240, 240)));
 
     EndPaint(hwnd, &ps);
 }
@@ -300,7 +427,6 @@ void PaintFailedMine(int x, int y, HWND hwnd, HINSTANCE hInstance)
 
     HICON hMineIcon = LoadIcon(hInstance, MAKEINTRESOURCE(ID_MINE_FAILED_ICON));
     DrawIcon(hdc, rect.left, rect.top, hMineIcon);
-
 }
 
 void PaintValues(HDC hdc, HINSTANCE hInstance)
@@ -459,6 +585,9 @@ void ResetGame(HWND hwnd, int newGridSize, int newNumMines)
     numMines = newNumMines;
     revealedCells = 0;
 
+    CleanBackground(hwnd);
+    InvalidateRect(hwnd, NULL, TRUE);
+
     grid.clear();
     gridButtons.clear();
     grid.resize(newGridSize, vector<Cell>(newGridSize));
@@ -473,6 +602,15 @@ void ResetGame(HWND hwnd, int newGridSize, int newNumMines)
         gridSize * CELL_SIZE + 16 + BORDER_WIDTH * 2,
         gridSize * CELL_SIZE + 36 + TOOLBAR_HEIGHT + BORDER_WIDTH + NAV_BAR_HEIGHT,
         SWP_NOMOVE | SWP_NOZORDER
+    );
+
+    // Move smiley button
+    SetWindowPos(
+        smileyButton, NULL,
+        (gridSize * CELL_SIZE + BORDER_WIDTH * 2) / 2 - CELL_SIZE / 2,
+         TOOLBAR_HEIGHT / 2 - CELL_SIZE / 2,
+         CELL_SIZE, CELL_SIZE,
+         SWP_NOZORDER
     );
 
     // Initialize grid buttons
@@ -498,8 +636,10 @@ void ResetGame(HWND hwnd, int newGridSize, int newNumMines)
     }
 
     isGridInitialized = false;
+    hasGameEnded = false;
+    flaggsLeft = numMines;
+    elapsedSeconds = 0;
 }
-
 
 void PrintGrid()
 {
