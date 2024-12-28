@@ -3,7 +3,7 @@
 #include <windows.h>
 #include <vector>
 #include <ctime>
-#include<stdio.h>
+#include <stdio.h>
 #include "minesweeper.h"
 
 using namespace std;
@@ -543,16 +543,19 @@ void PaintValues(HDC hdc, HINSTANCE hInstance)
             switch (grid[x][y].adjacentMines)
             {
                 case 1:
-                    DrawColorText(hdc, rect, "1", BLUE);
+                {
+                    char* a = "1";
+                    DrawColorText(hdc, rect, a, BLUE);
                     break;
+                }
                 case 2:
-                    DrawColorText(hdc, rect, "2", GREEN);
+                    DrawColorText(hdc, rect, TEXT("2"), GREEN);
                     break;
                 case 3:
-                    DrawColorText(hdc, rect, "3", RED);
+                    DrawColorText(hdc, rect, TEXT("3"), RED);
                     break;
                 case 4:
-                    DrawColorText(hdc, rect, "4", DARK_BLUE);
+                    DrawColorText(hdc, rect, TEXT("4"), DARK_BLUE);
                     break;
                 case 5:
                     DrawColorText(hdc, rect, "5", MAROON);

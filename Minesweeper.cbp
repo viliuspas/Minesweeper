@@ -38,14 +38,7 @@
 			<Add library="comctl32" />
 		</Linker>
 		<Unit filename="main.cpp" />
-		<Unit filename="minesweeper.h" />
-		<Unit filename="resources.rc">
-			<Option compilerVar="WINDRES" />
-		</Unit>
 		<Extensions>
-			<code_completion />
-			<envvars />
-			<debugger />
 			<lib_finder disable_auto="1" />
 		</Extensions>
 	</Project>
