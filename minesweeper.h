@@ -15,7 +15,11 @@
 #define ID_GAME_NEW 9000
 #define ID_GAME_EXIT 9001
 #define ID_HELP 9002
+#define ID_SCORES_BEGINNER 10004
+#define ID_SCORES_INTERMEDIATE 10005
+#define ID_SCORES_EXPERT 10006
 
+#define SCORE_PATH "scores.txt"
 #define GRID_SIZE 10
 #define GRID_SIZE_BEGINNER 10
 #define GRID_SIZE_INTERNEDIATE 15
@@ -38,3 +42,15 @@
 #define TEAL RGB(0, 128, 128)
 #define BLACK RGB(0, 0, 0)
 #define GRAY RGB(128, 128, 128)
+
+
+#define TUTORIAL_TEXT \
+    "To start the game, left-click on any cell on the board. This will clear that cell and reveal what’s underneath.\
+ If the cell contains a number, that number indicates how many mines are in the eight adjacent cells (above, below, left, right, and diagonally).\
+ For example, if a cell shows the number \"2,\" it means two of its neighboring cells contain mines.\n\n\
+If you suspect a cell contains a mine, you can right-click on it to mark it with a flag. Use the numbers revealed on cleared cells to deduce where the mines are located.\
+ For instance, if a cell shows a \"1\" and one of its neighbors is flagged, you know the other adjacent cells are safe to click.\n\n\
+The total number of flags you can place is displayed in the top left corner, while a timer in the top right tracks how long you’ve been playing.\
+ Your goal is to clear all the cells that are not mines while avoiding the mined cells. Be careful: clicking on a mine ends the game.\n\n\
+You win when all non-mine cells are cleared. To add more variety and challenge, use the navigation menu to select different difficulty levels.\
+ Try to achieve the fastest time possible by clearing the board efficiently!"

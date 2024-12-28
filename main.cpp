@@ -1,6 +1,6 @@
 #include <tchar.h>
+#define _WIN32_WINNT 0x0500 // Hide console
 #include <windows.h>
-#include <iostream>
 #include <vector>
 #include <ctime>
 #include<stdio.h>
@@ -8,7 +8,11 @@
 
 using namespace std;
 
+typedef bool (*SAVEPROC)(int, int, const char*);
+typedef int (*HIGHSCOREPROC) (int, const char*);
+
 LRESULT CALLBACK WindowProcedure (HWND, UINT, WPARAM, LPARAM);
+void handleMenu(HWND, WPARAM);
 void PaintComponents(HWND, HINSTANCE);
 void PaintGrid(HDC);
 void DrawColorText(HDC, RECT, char*, COLORREF);
@@ -21,8 +25,9 @@ void PaintFailedMine(int, int, HWND, HINSTANCE);
 void InitializeGrid(int, int);
 void RevealCells(int, int);
 bool areNeighbors(int, int, int , int);
-void ResetGame(HWND, int, int);
-void PrintGrid();
+void GetHighScores(HWND, int);
+void SaveScore(HWND, int, int);
+void ResetGame(HWND, int, int, int);
 
 TCHAR szClassName[ ] = _T("Minesweeper");
 
@@ -35,6 +40,7 @@ struct Cell {
 
 int gridSize = GRID_SIZE;
 int numMines = NUM_MINES;
+int currendDifficulty = ID_SCORES_BEGINNER;
 int revealedCells = 0;
 int elapsedSeconds = 0;
 int flaggsLeft = numMines;
@@ -47,6 +53,7 @@ HWND smileyButton = NULL;
 
 int WINAPI WinMain (HINSTANCE hThisInstance, HINSTANCE hPrevInstance, LPSTR lpszArgument, int nCmdShow)
 {
+    ShowWindow (GetConsoleWindow(), SW_HIDE); // Hide console
     HWND hwnd;
     MSG messages;
     WNDCLASSEX wincl;
@@ -155,50 +162,13 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             // Menu
             if (lParam == 0)
             {
-                switch (LOWORD(wParam))
-                {
-                    case ID_GAME_NEW:
-                        ResetGame(hwnd, gridSize, numMines);
-                        break;
-
-                    case ID_GAME_EXIT:
-                        PostMessage(hwnd, WM_CLOSE, 0, 0);
-                        break;
-
-                    case ID_HELP:
-                        MessageBox(hwnd, TEXT("Help in progress"), TEXT("Help"), MB_OK);
-                        break;
-
-                    case ID_GAME_BEGINNER:
-                        CheckMenuItem(hMenu, LOWORD(wParam), MF_CHECKED);
-                        CheckMenuItem(hMenu, ID_GAME_INTERMEDIATE, MF_UNCHECKED);
-                        CheckMenuItem(hMenu, ID_GAME_EXPERT, MF_UNCHECKED);
-                        ResetGame(hwnd, GRID_SIZE_BEGINNER, NUM_MINES_BEGINNER);
-                        break;
-
-                    case ID_GAME_INTERMEDIATE:
-                        CheckMenuItem(hMenu, LOWORD(wParam), MF_CHECKED);
-                        CheckMenuItem(hMenu, ID_GAME_BEGINNER, MF_UNCHECKED);
-                        CheckMenuItem(hMenu, ID_GAME_EXPERT, MF_UNCHECKED);
-                        ResetGame(hwnd, GRID_SIZE_INTERNEDIATE, NUM_MINES_INTERMEDIATE);
-                        break;
-
-                    case ID_GAME_EXPERT:
-                        CheckMenuItem(hMenu, LOWORD(wParam), MF_CHECKED);
-                        CheckMenuItem(hMenu, ID_GAME_BEGINNER, MF_UNCHECKED);
-                        CheckMenuItem(hMenu, ID_GAME_INTERMEDIATE, MF_UNCHECKED);
-                        ResetGame(hwnd, GRID_SIZE_EXPERT, NUM_MINES_EXPERT);
-                        break;
-
-                    default:
-                        break;
-                }
+                handleMenu(hwnd, wParam);
             }
 
             // Smiley button
             else if (LOWORD(wParam) == ID_SMILEY_HAPPY_ICON)
             {
-                ResetGame(hwnd, gridSize, numMines);
+                ResetGame(hwnd, gridSize, numMines, currendDifficulty);
                 SendMessage(smileyButton, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hSmileyHappyIcon);
                 break;
             }
@@ -250,7 +220,10 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 {
                     hasGameEnded = true;
                     SendMessage(smileyButton, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hSmileyCoolIcon);
-                    MessageBox(hwnd, TEXT("You Won!"), TEXT("Minesweeper"), MB_OK);
+                    char time[15];
+                    sprintf(time, "You Won in %d seconds!", elapsedSeconds);
+                    MessageBox(hwnd, time, TEXT("Minesweeper"), MB_OK);
+                    SaveScore(hwnd, currendDifficulty, elapsedSeconds);
                     break;
                 }
 
@@ -318,6 +291,113 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     return 0;
 }
 
+void handleMenu(HWND hwnd, WPARAM wParam)
+{
+    switch (LOWORD(wParam))
+    {
+        case ID_GAME_NEW:
+            ResetGame(hwnd, gridSize, numMines, currendDifficulty);
+            break;
+
+        case ID_GAME_EXIT:
+            PostMessage(hwnd, WM_CLOSE, 0, 0);
+            break;
+
+        case ID_HELP:
+            MessageBox(hwnd, TUTORIAL_TEXT, TEXT("Tutorial"), MB_OK);
+            break;
+
+        case ID_GAME_BEGINNER:
+            CheckMenuItem(hMenu, LOWORD(wParam), MF_CHECKED);
+            CheckMenuItem(hMenu, ID_GAME_INTERMEDIATE, MF_UNCHECKED);
+            CheckMenuItem(hMenu, ID_GAME_EXPERT, MF_UNCHECKED);
+            ResetGame(hwnd, GRID_SIZE_BEGINNER, NUM_MINES_BEGINNER, ID_SCORES_BEGINNER);
+            break;
+
+        case ID_GAME_INTERMEDIATE:
+            CheckMenuItem(hMenu, LOWORD(wParam), MF_CHECKED);
+            CheckMenuItem(hMenu, ID_GAME_BEGINNER, MF_UNCHECKED);
+            CheckMenuItem(hMenu, ID_GAME_EXPERT, MF_UNCHECKED);
+            ResetGame(hwnd, GRID_SIZE_INTERNEDIATE, NUM_MINES_INTERMEDIATE, ID_SCORES_INTERMEDIATE);
+            break;
+
+        case ID_GAME_EXPERT:
+            CheckMenuItem(hMenu, LOWORD(wParam), MF_CHECKED);
+            CheckMenuItem(hMenu, ID_GAME_BEGINNER, MF_UNCHECKED);
+            CheckMenuItem(hMenu, ID_GAME_INTERMEDIATE, MF_UNCHECKED);
+            ResetGame(hwnd, GRID_SIZE_EXPERT, NUM_MINES_EXPERT, ID_SCORES_EXPERT);
+            break;
+
+        case ID_SCORES_BEGINNER:
+            GetHighScores(hwnd, ID_SCORES_BEGINNER);
+            break;
+
+        case ID_SCORES_INTERMEDIATE:
+            GetHighScores(hwnd, ID_SCORES_INTERMEDIATE);
+            break;
+
+        case ID_SCORES_EXPERT:
+            GetHighScores(hwnd, ID_SCORES_EXPERT);
+            break;
+
+        default:
+            break;
+    }
+}
+
+void GetHighScores(HWND hwnd, int scoreId)
+{
+    char* difficulty;
+    if (scoreId == ID_SCORES_BEGINNER)
+        difficulty = "Highscore | Beginner";
+    else if (scoreId == ID_SCORES_INTERMEDIATE)
+        difficulty = "Highscore | Intermediate";
+    else if (scoreId == ID_SCORES_EXPERT)
+        difficulty = "Highscore | Expert";
+    else return;
+
+    HINSTANCE lib = LoadLibrary("ScoreMasterDLL.dll");
+    HIGHSCOREPROC Highscore = (HIGHSCOREPROC)GetProcAddress(lib, "GetMinScore");
+    if (lib == NULL)
+    {
+        MessageBox(hwnd, TEXT("ERROR: ScoreMasterDLL.dll not found."), TEXT("Minesweeper"), MB_OK);
+        return;
+    }
+
+    int highscore = Highscore(scoreId, SCORE_PATH);
+    if (Highscore == NULL || highscore == -1)
+    {
+        MessageBox(hwnd, TEXT("No scores yet."), difficulty, MB_OK);
+        return;
+    }
+
+    char str[15];
+    sprintf(str, "%d seconds", highscore);
+    MessageBox(hwnd, str, difficulty, MB_OK);
+}
+
+void SaveScore(HWND hwnd, int scoreId, int score)
+{
+    if (scoreId != ID_SCORES_BEGINNER && scoreId != ID_SCORES_EXPERT && scoreId != ID_SCORES_INTERMEDIATE)
+        return;
+    if (score < 0)
+        return;
+
+    HINSTANCE lib = LoadLibrary("ScoreMasterDLL.dll");
+    SAVEPROC Score = (SAVEPROC)GetProcAddress(lib, "SaveScore");
+    if (lib == NULL)
+    {
+        MessageBox(hwnd, TEXT("ERROR: ScoreMasterDLL.dll not found. Failed to save score"), TEXT("Minesweeper"), MB_OK);
+        return;
+    }
+
+    if (!Score(scoreId, score, SCORE_PATH))
+    {
+        MessageBox(hwnd, TEXT("ERROR: Failed to save score"), TEXT("Minesweeper"), MB_OK);
+        return;
+    }
+}
+
 void PaintComponents(HWND hwnd, HINSTANCE hInstance)
 {
     PAINTSTRUCT ps;
@@ -379,7 +459,7 @@ void CleanBackground(HWND hwnd)
 
     RECT rect;
     GetClientRect(hwnd, &rect);
-    FillRect(hdc, &rect, CreateSolidBrush(RGB(240, 240, 240)));
+    FillRect(hdc, &rect, CreateSolidBrush(COLOR_BACKGROUND));
 
     EndPaint(hwnd, &ps);
 }
@@ -571,7 +651,7 @@ bool areNeighbors(int x1, int y1, int x2, int y2)
     return (dx <= 1 && dy <= 1 && (dx + dy > 0));
 }
 
-void ResetGame(HWND hwnd, int newGridSize, int newNumMines)
+void ResetGame(HWND hwnd, int newGridSize, int newNumMines, int newDifficulty)
 {
     for (int x = 0; x < gridSize; ++x)
     {
@@ -583,6 +663,7 @@ void ResetGame(HWND hwnd, int newGridSize, int newNumMines)
 
     gridSize = newGridSize;
     numMines = newNumMines;
+    currendDifficulty = newDifficulty;
     revealedCells = 0;
 
     CleanBackground(hwnd);
@@ -639,23 +720,5 @@ void ResetGame(HWND hwnd, int newGridSize, int newNumMines)
     hasGameEnded = false;
     flaggsLeft = numMines;
     elapsedSeconds = 0;
-}
-
-void PrintGrid()
-{
-    for(int y = 0; y < gridSize; ++y)
-    {
-        for(int x = 0; x < gridSize; ++x)
-        {
-            if (grid[x][y].isMine)
-            {
-                cout<<"M ";
-                continue;
-            }
-            cout<<grid[x][y].adjacentMines<<" ";
-        }
-        cout<<endl;
-    }
-    cout<<endl;
 }
 

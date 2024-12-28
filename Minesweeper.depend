@@ -1,8 +1,7 @@
 # depslib dependency file v1.0
-1735339076 source:d:\files\repositories\minesweeper\main.cpp
+1735413931 source:d:\files\repositories\minesweeper\main.cpp
 	<tchar.h>
 	<windows.h>
-	<iostream>
 	<vector>
 	<ctime>
 	<stdio.h>
@@ -13,8 +12,8 @@
 1733594474 source:d:\files\repositories\minesweeper\stuff.rc
 	"stuff.h"
 
-1735332704 d:\files\repositories\minesweeper\minesweeper.h
+1735414066 d:\files\repositories\minesweeper\minesweeper.h
 
-1735330224 source:d:\files\repositories\minesweeper\resources.rc
+1735412115 source:d:\files\repositories\minesweeper\resources.rc
 	"minesweeper.h"
 

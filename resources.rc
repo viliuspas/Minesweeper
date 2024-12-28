@@ -5,10 +5,10 @@ ID_FLAG_ICON ICON "icons/button-flag.ico"
 ID_BUTTON_ICON ICON "icons/button.ico"
 ID_MINE_ICON ICON "icons/mine0.ico"
 ID_MINE_FAILED_ICON ICON "icons/mine-failed.ico"
-ID_SMILEY_HAPPY_ICON ICON "icons/smiley1.ico"
-ID_SMILEY_COOL_ICON ICON "icons/smiley.ico"
-ID_SMILEY_SHOCKED_ICON ICON "icons/smiley2.ico"
-ID_SMILEY_SAD_ICON ICON "icons/smiley3.ico"
+ID_SMILEY_HAPPY_ICON ICON "icons/smiley-happy-background.ico"
+ID_SMILEY_COOL_ICON ICON "icons/smiley-cool-background.ico"
+ID_SMILEY_SHOCKED_ICON ICON "icons/smiley-happy-background.ico"
+ID_SMILEY_SAD_ICON ICON "icons/cursed-smiley-background.ico"
 
 IDR_MYMENU MENU
 BEGIN
@@ -21,6 +21,13 @@ BEGIN
         MENUITEM "Expert", ID_GAME_EXPERT
         MENUITEM SEPARATOR
         MENUITEM "E&xit", ID_GAME_EXIT
+    END
+
+    POPUP "Scores"
+    BEGIN
+        MENUITEM "Beginner", ID_SCORES_BEGINNER
+        MENUITEM "Intermediate", ID_SCORES_INTERMEDIATE
+        MENUITEM "Expert", ID_SCORES_EXPERT
     END
 
     POPUP "Help"
